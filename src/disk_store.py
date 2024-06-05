@@ -60,6 +60,16 @@ class DiskStorage:
         _, _, value = decode_kv(data)
         return value
 
+    def delete(self, key: str) -> None:
+        """
+        deletes a given key
+        delete operations calls the set operation and sets the value to an
+        empty string.
+        args:
+            key : key to be deleted
+        """
+        return self.set(key, "")
+
     def close(self) -> None:
         self.file.flush()
         fsync(self.file.fileno())
