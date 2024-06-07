@@ -1,15 +1,13 @@
-import typing
 import time
+import os
 from os import path, fsync
-from format import (
+from src.format import (
     KVEntry,
     decode_header,
     encode_kv,
     decode_kv,
     HEADER_SIZE,
 )
-
-DEFAULT_WHENCE: typing.Final[int] = 0
 
 
 class DiskStorage:
@@ -31,10 +29,10 @@ class DiskStorage:
             value : corresponding value
         """
         tstamp: int = int(time.time())
-        sz, data = encode_kv(key, value)
+        sz, data = encode_kv(tstamp, key, value)
         self._write(data)
 
-        kv_entry: KVEntry = KVEntry(tstamp, self.write_pos, value)
+        kv_entry: KVEntry = KVEntry(tstamp, self.write_pos, sz)
 
         self.key_dir[key] = kv_entry
         self.write_pos += sz
@@ -51,11 +49,11 @@ class DiskStorage:
 
         return value corresponding to given key if it exists, else empty string
         """
-        kv_entry = self.key_dir.get(key)
+        kv_entry = self.key_dir.get(key, None)
         if not kv_entry:
             return ""
 
-        self.file.seek(kv_entry.pos, DEFAULT_WHENCE)
+        self.file.seek(kv_entry.pos, os.SEEK_SET)
         data: bytes = self.file.read(kv_entry.size)
         _, _, value = decode_kv(data)
         return value
@@ -85,13 +83,22 @@ class DiskStorage:
         fsync(self.file.fileno())
 
     def _init_key_dir(self) -> None:
+        """
+        loads the key_dir by reading the data files
+        """
         print("initialing database...")
 
         with open(self.filename, "rb") as f:
             while hdr_bytes := f.read(HEADER_SIZE):
                 tstamp, ksz, vsz = decode_header(hdr_bytes)
 
-                key = f.read(ksz).decode("utf-8")
+                key_bytes = f.read(ksz)
+                key = key_bytes.decode("utf-8")
+
+                # advance seek position by vsz position so that we are reading
+                # the next correct KV entry
+                f.seek(vsz, os.SEEK_CUR)
+
                 total_size = HEADER_SIZE + ksz + vsz
                 kv_entry = KVEntry(tstamp, self.write_pos, total_size)
 
