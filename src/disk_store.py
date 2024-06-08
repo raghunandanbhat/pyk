@@ -1,16 +1,18 @@
 import time
 import os
+import zlib
 from os import path, fsync
+from src.utils import validate_kv
+from src.custom_types import KeyType, ValueType
 from src.format import (
     KVEntry,
-    decode_header,
-    encode_kv,
-    decode_kv,
+    KVHeader,
+    KVData,
     HEADER_SIZE,
 )
 
 
-class DiskStorage:
+class KVStore:
     def __init__(self, filename: str = "file.db"):
         self.filename: str = filename
         self.write_pos: int = 0
@@ -21,23 +23,38 @@ class DiskStorage:
 
         self.file = open(filename, "a+b")
 
-    def set(self, key: str, value: str) -> None:
+    def set(self, key: KeyType, value: ValueType, expirey: int = 0) -> None:
         """
         store key and value on disk
         args:
-            key   : the key
-            value : corresponding value
+            key    : the key
+            value  : corresponding value
+            expirey: key value expirey time in seconds
         """
+        if not validate_kv(key, value):
+            return ""
+
         tstamp: int = int(time.time())
-        sz, data = encode_kv(tstamp, key, value)
+        crc32_checksum: int = zlib.crc32(str(value).encode("utf-8"))
+
+        kv_header = KVHeader(
+            checksum=crc32_checksum,
+            timestamp=tstamp,
+            expirey=(tstamp + expirey) if expirey > 0 else 0,
+            key_sz=len(str(key)),
+            value_sz=len(str(value)),
+        )
+
+        sz, data = KVData(header=kv_header, key=key, value=value).encode_kv()
+
         self._write(data)
 
-        kv_entry: KVEntry = KVEntry(tstamp, self.write_pos, sz)
+        kv_entry: KVEntry = KVEntry(timestamp=tstamp, pos=self.write_pos, size=sz)
 
         self.key_dir[key] = kv_entry
         self.write_pos += sz
 
-    def get(self, key: str) -> str:
+    def get(self, key: KeyType) -> str:
         """
         retrive value corresponding to a given key
             1. move the file pointer to the approprate postion
@@ -55,7 +72,16 @@ class DiskStorage:
 
         self.file.seek(kv_entry.pos, os.SEEK_SET)
         data: bytes = self.file.read(kv_entry.size)
-        _, _, value = decode_kv(data)
+        _, hdr, _, value = KVData.decode_kv(data)
+
+        # check for TTL expirey
+        if hdr.expired():
+            return ""
+
+        # verify CRC checksum
+        if not hdr.valid(value):
+            return ""
+
         return value
 
     def delete(self, key: str) -> None:
@@ -90,7 +116,7 @@ class DiskStorage:
 
         with open(self.filename, "rb") as f:
             while hdr_bytes := f.read(HEADER_SIZE):
-                tstamp, ksz, vsz = decode_header(hdr_bytes)
+                chksm, tstamp, expiry, ksz, vsz = KVHeader.decode(hdr_bytes)
 
                 key_bytes = f.read(ksz)
                 key = key_bytes.decode("utf-8")
@@ -104,4 +130,5 @@ class DiskStorage:
 
                 self.key_dir[key] = kv_entry
                 self.write_pos += total_size
+                # print(f"kv init for key-{key} complete..")
         print("db initialization comeplete, ready to use!\n")

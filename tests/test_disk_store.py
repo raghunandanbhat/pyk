@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 
-from src.disk_store import DiskStorage
+from src.disk_store import KVStore
 
 
 class TempStorageFile:
@@ -41,21 +41,21 @@ class TestDiskStorage(unittest.TestCase):
         self.file.cleanup()
 
     def test_get(self):
-        ds = DiskStorage(self.file.path)
+        ds = KVStore(self.file.path)
         ds.set(key="foo", value="bar")
 
         self.assertEqual(ds.get("foo"), "bar")
         ds.close()
 
     def test_get_invalid_key(self):
-        ds = DiskStorage(self.file.path)
+        ds = KVStore(self.file.path)
 
         self.assertEqual(ds.get("bar"), "")
 
         ds.close()
 
     def test_set(self):
-        ds = DiskStorage(self.file.path)
+        ds = KVStore(self.file.path)
         ds.set("quick", "brown fox")
         self.assertEqual(ds.get("quick"), "brown fox")
 
@@ -67,7 +67,7 @@ class TestDiskStorage(unittest.TestCase):
         ds.close()
 
     def test_persistance(self):
-        ds = DiskStorage(self.file.path)
+        ds = KVStore(self.file.path)
 
         kvs = {
             "name": "Alice",
@@ -85,14 +85,14 @@ class TestDiskStorage(unittest.TestCase):
 
         ds.close()
 
-        ds = DiskStorage(self.file.path)
+        ds = KVStore(self.file.path)
         for k, v in kvs.items():
             self.assertEqual(ds.get(k), v)
 
         ds.close()
 
     def test_delete(self):
-        ds = DiskStorage(self.file.path)
+        ds = KVStore(self.file.path)
 
         kvs = {
             "name": "Alice",
@@ -114,10 +114,6 @@ class TestDiskStorage(unittest.TestCase):
             self.assertNotEqual(ds.get(k), v)
 
         ds.close()
-
-
-class TestExistingDiskStorage(unittest.TestCase):
-    pass
 
 
 if __name__ == "__main__":
