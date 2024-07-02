@@ -114,10 +114,12 @@ class KVStore:
         """
         print("initialing database...")
 
-        with open(self.filename, "rb") as f:
+        with open(self.filename, "a+b") as f:
             # flushing buffers before reload to persit leftover data in buffers
             f.flush()
             fsync(f.fileno())
+            # reset position back to zero
+            f.seek(0)
 
             while hdr_bytes := f.read(HEADER_SIZE):
                 chksm, tstamp, expiry, ksz, vsz = KVHeader.decode(hdr_bytes)
