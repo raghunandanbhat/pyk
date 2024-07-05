@@ -1,8 +1,12 @@
 import os
+import sys
 import tempfile
 import unittest
 
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 from src.disk_store import KVStore
+from src.custom_types import TOMBSTONE
 
 
 class TempStorageFile:
@@ -64,6 +68,34 @@ class TestDiskStorage(unittest.TestCase):
         self.assertNotEqual(ds.get("quick"), "")
         self.assertEqual(ds.get("quick"), "black fox")
 
+        kvs = {
+            "name": "Alice",
+            "city": "New York",
+            "age": 30,
+            "pay_rate": 75.5,
+            "occupation": "Engineer",
+            "hobbies": "Reading, Cycling, Hiking",
+            # "email": b"alice@example.com",
+            b"languages": "English, Spanish, French",
+            1234: "id",
+            3.14: b"PI",
+        }
+
+        for k, v in kvs.items():
+            ds.set(k, v)
+            val = ds.get(k)
+            if isinstance(val, type(v)):
+                self.assertEqual(ds.get(k), v)
+            else:
+                if isinstance(v, int):
+                    self.assertEqual(int(val), v)
+                elif isinstance(v, float):
+                    self.assertEqual(float(val), v)
+                elif isinstance(v, bytes):
+                    self.assertEqual(val, str(v))
+                else:
+                    pass
+
         ds.close()
 
     def test_persistance(self):
@@ -110,10 +142,18 @@ class TestDiskStorage(unittest.TestCase):
 
         for k, v in kvs.items():
             ds.delete(k)
-            self.assertEqual(ds.get(k), "")
+            self.assertEqual(int(ds.get(k)), TOMBSTONE)
             self.assertNotEqual(ds.get(k), v)
 
         ds.close()
+
+    def test_UnsupportedTypeError(self):
+        ds = KVStore(self.file.path)
+
+        kvs = {"alist": [1, 2, 3], (1, 2): "tuple"}
+
+        for k, v in kvs.items():
+            ds.set(k, v)
 
 
 if __name__ == "__main__":
