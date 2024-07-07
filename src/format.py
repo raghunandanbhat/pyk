@@ -3,8 +3,7 @@ import struct
 import zlib
 import time
 from src.custom_types import KeyType, ValueType
-from src.utils import encode_to_str
-from src.errors import UnsupportedTypeError
+
 
 """
 ref: https://riak.com/assets/bitcask-intro.pdf
@@ -118,20 +117,7 @@ class KVData:
         returns a tuple of size of encoded bytes and byte object
         """
         hdr: bytes = self.header.encode_hdr()
-        try:
-            key: str = encode_to_str(self.key)
-        except UnsupportedTypeError as e:
-            raise UnsupportedTypeError(
-                e.value_type,
-            ) from e
-        try:
-            val: str = encode_to_str(self.value)
-        except UnsupportedTypeError as e:
-            raise UnsupportedTypeError(
-                e.value_type,
-            ) from e
-
-        data: bytes = b"".join([str.encode(key), str.encode(val)])
+        data: bytes = b"".join([str.encode(self.key), str.encode(self.value)])
         return HEADER_SIZE + len(data), hdr + data
 
     @classmethod

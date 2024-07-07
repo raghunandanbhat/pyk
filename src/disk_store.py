@@ -2,8 +2,9 @@ import time
 import os
 import zlib
 from os import path, fsync
-from src.utils import validate_kv
 from src.custom_types import KeyType, ValueType, TOMBSTONE
+from src.utils import encode_to_str
+from src.errors import UnsupportedTypeError
 from src.format import (
     KVEntry,
     KVHeader,
@@ -31,9 +32,6 @@ class KVStore:
             value  : corresponding value
             expirey: key value expirey time in seconds
         """
-        if not validate_kv(key, value):
-            return ""
-
         self._set_key(
             key=key,
             val=value,
@@ -52,6 +50,11 @@ class KVStore:
 
         return value corresponding to given key if it exists, else empty string
         """
+        try:
+            key: str = encode_to_str(key)
+        except UnsupportedTypeError as e:
+            raise UnsupportedTypeError(e.value_type, "for key in get()") from e
+
         kv_entry = self.key_dir.get(key, None)
         if not kv_entry:
             return ""
@@ -97,6 +100,16 @@ class KVStore:
         set a value for key, persist to disk. when a key is deleted, a tombstone
         value is written by calling this function
         """
+        try:
+            key: str = encode_to_str(key)
+        except UnsupportedTypeError as e:
+            raise UnsupportedTypeError(e.value_type, "for key in _set_key()") from e
+
+        try:
+            val: str = encode_to_str(val)
+        except UnsupportedTypeError as e:
+            raise UnsupportedTypeError(e.value_type, "for value in _set_key()") from e
+
         tstamp: int = int(time.time())
         crc32_checksum: int = zlib.crc32(str(val).encode("utf-8"))
 

@@ -5,8 +5,8 @@ class UnsupportedTypeError(ValueError):
         super().__init__(self.__str__())
 
     def __str__(self) -> str:
-        message = f"Unsupported type: {self.value_type.__name__}"
+        message = f"Unsupported type: {self.value_type.__name__},"
         if self.context:
-            message += f" ({self.context})"
+            message += f" {self.context}"
 
         return message
