@@ -4,14 +4,15 @@ import zlib
 import time
 from src.custom_types import KeyType, ValueType
 
+
 """
 ref: https://riak.com/assets/bitcask-intro.pdf
 
 For each key value pair written to disk should be formatted in the following
 way
 
-    | crc | timestamp | expirey | ksz | value_sz |..key..|..value..|
-    | <-----------------HEADER-----------------> | <-----DATA----> |
+    | crc | timestamp | expirey | ksz | value_sz | deleted |..key..|..value..|
+    | <----------------------HEADER----------------------> | <-----DATA----> |
 
 this is a stream of bytes written to the file. All writes to the file are
 appended at the end. The data file is linear sequence of 'KVEntry' entries.
@@ -24,10 +25,10 @@ key and value can have varibale length.
 # L represents the unsigned-long representing the size of values
 # being encoded. Since CRC, timestamp, expiry, ksz, value_sz - 5 values are encoded,
 # three L's are present in the HEADER_ENCODING_FORMAT string
-HEADER_ENCODING_FORAMT: typing.Final[str] = "<LLLLL"
+HEADER_ENCODING_FORAMT: typing.Final[str] = "<LLLLLL"
 
 # size of the HEADER. Five values, each of size 4 bytes, totaling 20 bytes.
-HEADER_SIZE: typing.Final[int] = 20
+HEADER_SIZE: typing.Final[int] = 24
 
 
 class KVHeader:
@@ -46,14 +47,16 @@ class KVHeader:
         key_sz: int,
         value_sz: int,
         expirey: int = 0,
+        deleted: int = 0,
     ):
         self.checksum = checksum
         self.timestamp = timestamp
         self.expirey = expirey
+        self.deleted = deleted
         self.key_sz = key_sz
         self.value_sz = value_sz
 
-    def encode(self) -> bytes:
+    def encode_hdr(self) -> bytes:
         """
         encode header into bytes using encoding format
 
@@ -69,19 +72,20 @@ class KVHeader:
             self.checksum,
             self.timestamp,
             self.expirey,
+            self.deleted,
             self.key_sz,
             self.value_sz,
         )
 
     @classmethod
-    def decode(cls, data: bytes) -> tuple[int, int, int, int, int]:
+    def decode_hdr(cls, data: bytes) -> tuple[int, int, int, int, int, int]:
         """
         decode header bytes into header using the encoding format
 
         args:
             data : byte object conatining encoded header data
 
-        returns a tuple of timestamp, key_sz and value_sz
+        returns a tuple of timestamp, key_sz, value_sz
         """
         # print(len(data), data)
         return struct.unpack(HEADER_ENCODING_FORAMT, data)
@@ -112,7 +116,7 @@ class KVData:
 
         returns a tuple of size of encoded bytes and byte object
         """
-        hdr: bytes = self.header.encode()
+        hdr: bytes = self.header.encode_hdr()
         data: bytes = b"".join([str.encode(self.key), str.encode(self.value)])
         return HEADER_SIZE + len(data), hdr + data
 
@@ -124,9 +128,9 @@ class KVData:
         args:
             data : byte object containing KV pair data
 
-        returns a tuple of timestamp, key and value
+        returns a tuple of checksum, timestamp, expirey, deleted, key_sz, value_sz
         """
-        chksm, timestamp, expirey, key_sz, value_sz = KVHeader.decode(
+        chksm, timestamp, expirey, deleted, key_sz, value_sz = KVHeader.decode_hdr(
             data[:HEADER_SIZE]
         )
         hdr = KVHeader(
@@ -135,6 +139,7 @@ class KVData:
             expirey=expirey,
             key_sz=key_sz,
             value_sz=value_sz,
+            deleted=deleted,
         )
         key = data[HEADER_SIZE : HEADER_SIZE + key_sz].decode("utf-8")
         value = data[HEADER_SIZE + key_sz :].decode("utf-8")

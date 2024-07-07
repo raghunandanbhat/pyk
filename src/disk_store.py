@@ -2,8 +2,9 @@ import time
 import os
 import zlib
 from os import path, fsync
-from src.utils import validate_kv
-from src.custom_types import KeyType, ValueType
+from src.custom_types import KeyType, ValueType, TOMBSTONE
+from src.utils import encode_to_str
+from src.errors import UnsupportedTypeError
 from src.format import (
     KVEntry,
     KVHeader,
@@ -31,28 +32,11 @@ class KVStore:
             value  : corresponding value
             expirey: key value expirey time in seconds
         """
-        if not validate_kv(key, value):
-            return ""
-
-        tstamp: int = int(time.time())
-        crc32_checksum: int = zlib.crc32(str(value).encode("utf-8"))
-
-        kv_header = KVHeader(
-            checksum=crc32_checksum,
-            timestamp=tstamp,
-            expirey=(tstamp + expirey) if expirey > 0 else 0,
-            key_sz=len(str(key)),
-            value_sz=len(str(value)),
+        self._set_key(
+            key=key,
+            val=value,
+            expirey=expirey,
         )
-
-        sz, data = KVData(header=kv_header, key=key, value=value).encode_kv()
-
-        self._write(data)
-
-        kv_entry: KVEntry = KVEntry(timestamp=tstamp, pos=self.write_pos, size=sz)
-
-        self.key_dir[key] = kv_entry
-        self.write_pos += sz
 
     def get(self, key: KeyType) -> str:
         """
@@ -66,6 +50,11 @@ class KVStore:
 
         return value corresponding to given key if it exists, else empty string
         """
+        try:
+            key: str = encode_to_str(key)
+        except UnsupportedTypeError as e:
+            raise UnsupportedTypeError(e.value_type, "for key in get()") from e
+
         kv_entry = self.key_dir.get(key, None)
         if not kv_entry:
             return ""
@@ -92,12 +81,52 @@ class KVStore:
         args:
             key : key to be deleted
         """
-        return self.set(key, "")
+        self._set_key(
+            key=key,
+            val=TOMBSTONE,
+            expirey=int(time.time()),
+            mark_delete=True,
+        )
 
     def close(self) -> None:
         self.file.flush()
         fsync(self.file.fileno())
         self.file.close()
+
+    def _set_key(
+        self, key: KeyType, val: ValueType, expirey: int = 0, mark_delete: bool = False
+    ) -> None:
+        """
+        set a value for key, persist to disk. when a key is deleted, a tombstone
+        value is written by calling this function
+        """
+        try:
+            key: str = encode_to_str(key)
+        except UnsupportedTypeError as e:
+            raise UnsupportedTypeError(e.value_type, "for key in _set_key()") from e
+
+        try:
+            val: str = encode_to_str(val)
+        except UnsupportedTypeError as e:
+            raise UnsupportedTypeError(e.value_type, "for value in _set_key()") from e
+
+        tstamp: int = int(time.time())
+        crc32_checksum: int = zlib.crc32(str(val).encode("utf-8"))
+
+        kv_header = KVHeader(
+            checksum=crc32_checksum,
+            timestamp=tstamp,
+            expirey=(tstamp + expirey) if expirey > 0 else 0,
+            deleted=1 if mark_delete else 0,
+            key_sz=len(str(key)),
+            value_sz=len(str(val)),
+        )
+
+        sz, data = KVData(header=kv_header, key=key, value=val).encode_kv()
+        self._write(data)
+        kv_entry: KVEntry = KVEntry(timestamp=tstamp, pos=self.write_pos, size=sz)
+        self.key_dir[key] = kv_entry
+        self.write_pos += sz
 
     def _write(self, data: bytes) -> None:
         """
@@ -122,7 +151,9 @@ class KVStore:
             f.seek(0)
 
             while hdr_bytes := f.read(HEADER_SIZE):
-                chksm, tstamp, expiry, ksz, vsz = KVHeader.decode(hdr_bytes)
+                chksm, tstamp, expiry, deleted, ksz, vsz = KVHeader.decode_hdr(
+                    hdr_bytes
+                )
 
                 key_bytes = f.read(ksz)
                 key = key_bytes.decode("utf-8")
