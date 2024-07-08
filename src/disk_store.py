@@ -24,18 +24,18 @@ class KVStore:
 
         self.file = open(filename, "a+b")
 
-    def set(self, key: KeyType, value: ValueType, expirey: int = 0) -> None:
+    def set(self, key: KeyType, value: ValueType, expiry: int = 0) -> None:
         """
         store key and value on disk
         args:
             key    : the key
             value  : corresponding value
-            expirey: key value expirey time in seconds
+            expiry : key value expiry time in seconds
         """
         self._set_key(
             key=key,
             val=value,
-            expirey=expirey,
+            expiry=expiry,
         )
 
     def get(self, key: KeyType) -> str:
@@ -64,12 +64,16 @@ class KVStore:
         _, hdr, _, value = KVData.decode_kv(data)
 
         # check for TTL expirey
-        if hdr.expired():
-            return ""
+        if hdr.is_expired():
+            return "Key expired"
+
+        # check for deleted key:
+        if hdr.is_deleted():
+            return "Key deleted"
 
         # verify CRC checksum
-        if not hdr.valid(value):
-            return ""
+        if not hdr.is_valid(value):
+            return "Invalid/corrupted"
 
         return value
 
@@ -84,7 +88,6 @@ class KVStore:
         self._set_key(
             key=key,
             val=TOMBSTONE,
-            expirey=int(time.time()),
             mark_delete=True,
         )
 
@@ -94,7 +97,7 @@ class KVStore:
         self.file.close()
 
     def _set_key(
-        self, key: KeyType, val: ValueType, expirey: int = 0, mark_delete: bool = False
+        self, key: KeyType, val: ValueType, expiry: int = 0, mark_delete: bool = False
     ) -> None:
         """
         set a value for key, persist to disk. when a key is deleted, a tombstone
@@ -111,12 +114,13 @@ class KVStore:
             raise UnsupportedTypeError(e.value_type, "for value in _set_key()") from e
 
         tstamp: int = int(time.time())
+        expiry_tstmap: int = (tstamp + expiry) if expiry > 0 else expiry
         crc32_checksum: int = zlib.crc32(str(val).encode("utf-8"))
 
         kv_header = KVHeader(
             checksum=crc32_checksum,
             timestamp=tstamp,
-            expirey=(tstamp + expirey) if expirey > 0 else 0,
+            expiry=expiry_tstmap,
             deleted=1 if mark_delete else 0,
             key_sz=len(str(key)),
             value_sz=len(str(val)),

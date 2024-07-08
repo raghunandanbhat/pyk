@@ -46,12 +46,12 @@ class KVHeader:
         timestamp: int,
         key_sz: int,
         value_sz: int,
-        expirey: int = 0,
+        expiry: int = 0,
         deleted: int = 0,
     ):
         self.checksum = checksum
         self.timestamp = timestamp
-        self.expirey = expirey
+        self.expiry = expiry
         self.deleted = deleted
         self.key_sz = key_sz
         self.value_sz = value_sz
@@ -71,7 +71,7 @@ class KVHeader:
             HEADER_ENCODING_FORAMT,
             self.checksum,
             self.timestamp,
-            self.expirey,
+            self.expiry,
             self.deleted,
             self.key_sz,
             self.value_sz,
@@ -90,12 +90,15 @@ class KVHeader:
         # print(len(data), data)
         return struct.unpack(HEADER_ENCODING_FORAMT, data)
 
-    def expired(self) -> bool:
-        if self.expirey == 0:
+    def is_expired(self) -> bool:
+        if self.expiry == 0:
             return False
-        return self.expirey <= int(time.time())
+        return self.expiry <= int(time.time())
 
-    def valid(self, value: ValueType) -> bool:
+    def is_deleted(self) -> bool:
+        return self.deleted
+
+    def is_valid(self, value: ValueType) -> bool:
         return self.checksum == zlib.crc32(str(value).encode("utf-8"))
 
 
@@ -130,13 +133,13 @@ class KVData:
 
         returns a tuple of checksum, timestamp, expirey, deleted, key_sz, value_sz
         """
-        chksm, timestamp, expirey, deleted, key_sz, value_sz = KVHeader.decode_hdr(
+        chksm, timestamp, expiry, deleted, key_sz, value_sz = KVHeader.decode_hdr(
             data[:HEADER_SIZE]
         )
         hdr = KVHeader(
             checksum=chksm,
             timestamp=timestamp,
-            expirey=expirey,
+            expiry=expiry,
             key_sz=key_sz,
             value_sz=value_sz,
             deleted=deleted,
