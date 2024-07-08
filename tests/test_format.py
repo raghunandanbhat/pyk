@@ -16,9 +16,9 @@ from src.format import (
 
 class FormatTester(unittest.TestCase):
     def test_header_encoder_decoder(self) -> None:
-        chksm, tstamp, expirey, deleted, ksz, vsz = random_hdr()
+        chksm, tstamp, expiry, deleted, ksz, vsz = random_hdr()
         hdr = KVHeader(
-            checksum=chksm, timestamp=tstamp, key_sz=ksz, value_sz=vsz, expirey=expirey
+            checksum=chksm, timestamp=tstamp, key_sz=ksz, value_sz=vsz, expiry=expiry
         )
         data = hdr.encode_hdr()
         c, t, e, d, k, v = KVHeader.decode_hdr(data)
@@ -27,7 +27,7 @@ class FormatTester(unittest.TestCase):
         self.assertEqual(ksz, k)
         self.assertEqual(vsz, v)
         self.assertEqual(chksm, c)
-        self.assertEqual(expirey, e)
+        self.assertEqual(expiry, e)
         self.assertEqual(deleted, d)
 
     def test_headers(self):
@@ -35,14 +35,14 @@ class FormatTester(unittest.TestCase):
             self.test_header_encoder_decoder()
 
     def test_kv_encoder_decoder(self) -> None:
-        chksm, tstamp, expirey, deleted, key, val, size = random_kv_entry()
+        chksm, tstamp, expiry, deleted, key, val, size = random_kv_entry()
 
         hdr = KVHeader(
             checksum=chksm,
             timestamp=tstamp,
             key_sz=len(str(key)),
             value_sz=len(str(val)),
-            expirey=expirey,
+            expiry=expiry,
             deleted=deleted,
         )
         sz, data = KVData(header=hdr, key=key, value=val).encode_kv()
