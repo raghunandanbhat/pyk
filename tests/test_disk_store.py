@@ -6,7 +6,6 @@ import unittest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from src.disk_store import KVStore
-from src.custom_types import TOMBSTONE
 from src.errors import UnsupportedTypeError
 
 
@@ -143,7 +142,7 @@ class TestDiskStorage(unittest.TestCase):
 
         for k, v in kvs.items():
             ds.delete(k)
-            self.assertEqual(int(ds.get(k)), TOMBSTONE)
+            self.assertEqual(ds.get(k), "Key deleted")
             self.assertNotEqual(ds.get(k), v)
 
         ds.close()
