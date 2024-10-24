@@ -54,7 +54,7 @@ class TestDiskStorage(unittest.TestCase):
     def test_get_invalid_key(self):
         ds = KVStore(self.file.path)
 
-        self.assertEqual(ds.get("bar"), "")
+        self.assertEqual(ds.get("bar"), "Key Not Found")
 
         ds.close()
 
@@ -142,7 +142,7 @@ class TestDiskStorage(unittest.TestCase):
 
         for k, v in kvs.items():
             ds.delete(k)
-            self.assertEqual(ds.get(k), "Key deleted")
+            self.assertEqual(ds.get(k), "Key Not Found")
             self.assertNotEqual(ds.get(k), v)
 
         ds.close()
@@ -155,6 +155,35 @@ class TestDiskStorage(unittest.TestCase):
         with self.assertRaises(UnsupportedTypeError):
             for k, v in kvs.items():
                 ds.set(k, v)
+
+    def test_Compaction(self):
+        ds = KVStore(self.file.path)
+
+        kvs = {
+            "name": "Alice",
+            "city": "New York",
+            "age": "30",
+            "occupation": "Engineer",
+            "hobbies": "Reading, Cycling, Hiking",
+            "email": "alice@example.com",
+            "languages": "English, Spanish, French",
+        }
+
+        for k, v in kvs.items():
+            ds.set(k, v)
+            self.assertEqual(ds.get(k), v)
+
+        for k, v in kvs.items():
+            ds.delete(k)
+
+        ds.close()
+
+        ds = KVStore(self.file.path)
+        for k, v in kvs.items():
+            self.assertEqual(ds.get(k), "Key Not Found")
+            self.assertNotEqual(ds.get(k), v)
+
+        ds.close()
 
 
 if __name__ == "__main__":
