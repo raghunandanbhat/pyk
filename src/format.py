@@ -1,9 +1,9 @@
-import typing
 import struct
-import zlib
 import time
-from src.custom_types import KeyType, ValueType
+import typing
+import zlib
 
+from src.custom_types import KeyType, ValueType
 
 """
 ref: https://riak.com/assets/bitcask-intro.pdf
@@ -23,8 +23,8 @@ key and value can have varibale length.
 # header is packed into binary data using strcut.pack
 # most machines use little-endian representation - denoted by '<'
 # L represents the unsigned-long representing the size of values
-# being encoded. Since CRC, timestamp, expiry, ksz, value_sz - 5 values are encoded,
-# three L's are present in the HEADER_ENCODING_FORMAT string
+# being encoded. Since CRC, timestamp, expiry, ksz, value_sz - 5 values are
+# encoded, three L's are present in the HEADER_ENCODING_FORMAT string
 HEADER_ENCODING_FORAMT: typing.Final[str] = "<LLLLLL"
 
 # size of the HEADER. Five values, each of size 4 bytes, totaling 20 bytes.
@@ -120,21 +120,27 @@ class KVData:
         returns a tuple of size of encoded bytes and byte object
         """
         hdr: bytes = self.header.encode_hdr()
-        data: bytes = b"".join([str.encode(self.key), str.encode(self.value)])
+        data: bytes = b"".join(
+            [str.encode(self.key), str.encode(self.value)],
+        )
         return HEADER_SIZE + len(data), hdr + data
 
     @classmethod
-    def decode_kv(cls, data: bytes) -> tuple[int, KVHeader, KeyType, ValueType]:
+    def decode_kv(
+        cls,
+        data: bytes,
+    ) -> tuple[int, KVHeader, KeyType, ValueType]:
         """
         decode byte object into timestamp, key and value
 
         args:
             data : byte object containing KV pair data
 
-        returns a tuple of checksum, timestamp, expirey, deleted, key_sz, value_sz
+        returns a tuple of checksum, timestamp, expirey, deleted, key size,
+        value size.
         """
         chksm, timestamp, expiry, deleted, key_sz, value_sz = KVHeader.decode_hdr(
-            data[:HEADER_SIZE]
+            data[:HEADER_SIZE],
         )
         hdr = KVHeader(
             checksum=chksm,
